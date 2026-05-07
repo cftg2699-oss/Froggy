@@ -13,6 +13,10 @@ SESSION_LOG_DIR="$REPO_DIR/sessions"
 
 cd "$REPO_DIR"
 
+# ── Asegurar credencial ──
+git config credential.helper 'store --file /home/ghost/.openclaw/.git-credentials' 2>/dev/null
+export GIT_TERMINAL_PROMPT=0
+
 echo "🐸 Froggy Logs - Sync ${TODAY}"
 echo "═══════════════════════════════════"
 
