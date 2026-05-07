@@ -16,10 +16,14 @@ cd "$REPO_DIR"
 echo "🐸 Froggy Logs - Sync ${TODAY}"
 echo "═══════════════════════════════════"
 
-# ── 1. Contar sesiones y mensajes ──
+# ── 1. Contar sesiones, mensajes y costos ──
+echo ""
+echo "📊 Procesando sesiones..."
+
 total_sessions=0
 total_user_msgs=0
 total_froggy_msgs=0
+total_cost=0
 
 for f in "$SESSION_DIR"/*.jsonl; do
   [[ "$f" == *.trajectory.* ]] && continue
@@ -29,23 +33,29 @@ for f in "$SESSION_DIR"/*.jsonl; do
   total_sessions=$((total_sessions + 1))
   total_user_msgs=$((total_user_msgs + user_c))
   total_froggy_msgs=$((total_froggy_msgs + froggy_c))
+  session_cost=$(jq -s '[.[] | .message.usage.cost.total // 0] | add' "$f" 2>/dev/null)
+  total_cost=$(echo "$total_cost + $session_cost" | bc 2>/dev/null || echo "0")
 done
 
 echo "   📊 $total_sessions sesiones | $total_user_msgs msgs usuario | $total_froggy_msgs respuestas"
+echo "   💰 Costo total: \$$(printf '%.6f' $total_cost 2>/dev/null)"
 
-# ── 2. Generar log diario Markdown ──
+# ── 3. Generar log diario Markdown ──
 echo ""
 echo "📝 Generando log diario..."
 
 {
   echo "# 🐸 Log de Actividades — ${TODAY}"
   echo ""
-  echo "## Resumen"
+  echo "## Resumen General"
   echo ""
-  echo "- **Sesiones activas:** $total_sessions"
-  echo "- **Mensajes de usuarios:** $total_user_msgs"
-  echo "- **Respuestas de Froggy:** $total_froggy_msgs"
-  echo "- **Total interacciones:** $((total_user_msgs + total_froggy_msgs))"
+  echo "| Métrica | Valor |"
+  echo "|---------|-------|"
+  echo "| **Sesiones activas** | $total_sessions |"
+  echo "| **Mensajes de usuarios** | $total_user_msgs |"
+  echo "| **Respuestas de Froggy** | $total_froggy_msgs |"
+  echo "| **Total interacciones** | $((total_user_msgs + total_froggy_msgs)) |"
+  echo "| **Costo operativo** | \$$(printf '%.6f' $total_cost 2>/dev/null) USD |"
   echo ""
   echo "---"
   echo ""
@@ -57,8 +67,10 @@ echo "📝 Generando log diario..."
     session_id=$(basename "$f" .jsonl)
     first_msg=$(jq -r 'select(.type=="message" and .message.role=="user") | [.message.content[]? | select(.type=="text") | .text] | join(" ")' "$f" 2>/dev/null | head -1 | cut -c1-120)
     user_count=$(jq -s '[.[] | select(.type=="message" and .message.role=="user")] | length' "$f" 2>/dev/null)
+    froggy_count=$(jq -s '[.[] | select(.type=="message" and .message.role=="assistant")] | length' "$f" 2>/dev/null)
     first_ts=$(jq -r 'select(.type=="message") | .timestamp[:16]' "$f" 2>/dev/null | head -1)
     last_ts=$(jq -r 'select(.type=="message") | .timestamp[:16]' "$f" 2>/dev/null | tail -1)
+    session_cost=$(jq -s '[.[] | .message.usage.cost.total // 0] | add' "$f" 2>/dev/null)
 
     echo "### 💬 Sesión \`${session_id:0:12}...\`"
     echo ""
@@ -66,13 +78,15 @@ echo "📝 Generando log diario..."
     echo "|---|---|"
     echo "| **Inicio** | $first_ts |"
     echo "| **Fin** | $last_ts |"
-    echo "| **Mensajes** | $user_count del usuario |"
+    echo "| **👤 Usuario** | ${user_count} mensajes |"
+    echo "| **🐸 Froggy** | ${froggy_count} respuestas |"
+    echo "| **💰 Costo** | \$$(printf '%.6f' $session_cost 2>/dev/null) USD |"
     echo ""
     if [ -n "$first_msg" ]; then
       echo "> ${first_msg}"
       echo ""
     fi
-    echo "[📄 Ver completa](sessions/${session_id}.md)"
+    echo "[📄 Ver conversación completa](sessions/${session_id}.md)"
     echo ""
   done
 
@@ -83,7 +97,7 @@ echo "📝 Generando log diario..."
 
 echo "   ✅ logs/${TODAY}.md"
 
-# ── 3. Exportar conversaciones completas ──
+# ── 4. Exportar conversaciones completas ──
 echo ""
 echo "📄 Exportando conversaciones completas..."
 
@@ -91,13 +105,26 @@ for f in "$SESSION_DIR"/*.jsonl; do
   [[ "$f" == *.trajectory.* ]] && continue
   session_id=$(basename "$f" .jsonl)
 
-  # Extract user identifier from first messages for context
+  # Extraer primeros mensajes para identificar usuario
   user_info=$(jq -r 'select(.type=="message" and .message.role=="user") | [.message.content[]? | select(.type=="text") | .text] | join(" ")' "$f" 2>/dev/null | head -3 | cut -c1-200)
+
+  # Costo de la sesión
+  session_cost=$(jq -s '[.[] | .message.usage.cost.total // 0] | add' "$f" 2>/dev/null)
+  user_count=$(jq -s '[.[] | select(.type=="message" and .message.role=="user")] | length' "$f" 2>/dev/null)
+  froggy_count=$(jq -s '[.[] | select(.type=="message" and .message.role=="assistant")] | length' "$f" 2>/dev/null)
 
   {
     echo "# 🐸 Conversación: \`${session_id:0:16}...\`"
     echo ""
     echo "**Usuario:** ${user_info:-Desconocido}"
+    echo ""
+    echo "**📊 Métricas de la sesión:**"
+    echo ""
+    echo "| Métrica | Valor |"
+    echo "|---------|-------|"
+    echo "| **👤 Mensajes usuario** | $user_count |"
+    echo "| **🐸 Respuestas Froggy** | $froggy_count |"
+    echo "| **💰 Costo** | \$$(printf '%.6f' $session_cost 2>/dev/null) USD |"
     echo ""
     echo "---"
     echo ""
@@ -114,7 +141,7 @@ for f in "$SESSION_DIR"/*.jsonl; do
   echo "   ✅ sessions/${session_id}.md"
 done
 
-# ── 4. Commit & Push ──
+# ── 5. Commit & Push ──
 echo ""
 echo "⬆️ Subiendo a GitHub..."
 

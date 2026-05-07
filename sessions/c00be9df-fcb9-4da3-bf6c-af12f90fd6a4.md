@@ -4,6 +4,14 @@
 
 Begin. Your assigned task is in the system prompt under **Your Role**; execute it to completion.
 
+**📊 Métricas de la sesión:**
+
+| Métrica | Valor |
+|---------|-------|
+| **👤 Mensajes usuario** | 1 |
+| **🐸 Respuestas Froggy** | 2 |
+| **💰 Costo** | $0.002011 USD |
+
 ---
 
 ### 2026-05-07 14:22:26
@@ -44,4 +52,4 @@ Siempre aquí pa' ti.
 ---
 
 
-_Exportado: 2026-05-07 11:12:56_
+_Exportado: 2026-05-07 11:20:45_
